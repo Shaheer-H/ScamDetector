@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Content Verifier</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            margin: 40px auto;
+            max-width: 600px;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        #upload-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .upload-button {
+            background-color: #5cb85c;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+            width: 95%;
+            position: relative;
+            top: 0;
+            transition: all 0.3s ease;
+        }
+
+        .upload-button:hover {
+            background-color: #4cae4c;
+            top: -5px;
+            box-shadow: 0 5px 15px rgba(92, 184, 92, 0.4);
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        #preview-container {
+            margin: 20px auto;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            max-width: 95%;
+        }
+
+        #preview {
+            width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            border-radius: 5px;
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.2);
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+
+        .result-container {
+            background-color: #e7f3fe;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 16px;
+            color: #333;
+        }
+
+        .clear-button {
+            background-color: #d9534f;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 200px;
+            position: relative;
+            top: 0;
+            transition: all 0.3s ease;
+        }
+
+        .clear-button:hover {
+            background-color: #c9302c;
+            top: -5px;
+            box-shadow: 0 5px 15px rgba(217, 83, 79, 0.4);
+        }
+
+        .redo-button {
+            background-color: #5cb85c;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 200px;
+            position: relative;
+            top: 0;
+            transition: all 0.3s ease;
+        }
+
+        .redo-button:hover {
+            background-color: #4cae4c;
+            top: -5px;
+            box-shadow: 0 5px 15px rgba(92, 184, 92, 0.4);
+        }
+    </style>
+    <!-- Include marked.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body>
+    <h1>Content Verifier</h1>
+
+    <div id="upload-container">
+        <label for="file-input" class="upload-button">
+            Choose Screenshot
+        </label>
+        <input type="file" id="file-input" accept="image/*" required>
+    </div>
+
+    <div id="preview-container" style="display: none;">
+        <img id="preview">
+        <button id="detect-again" class="redo-button">Verify Again</button>
+        <button id="clear-button" class="clear-button">Clear All</button>
+    </div>
+
+    <div id="loading" style="display: none;">
+        Processing...
+    </div>
+
+    <div id="result" style="display: none;">
+        <div class="result-container">
+            <div id="extracted-text"></div>
+            <div id="analysis"></div>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('file-input');
+        const previewContainer = document.getElementById('preview-container');
+        const preview = document.getElementById('preview');
+        const result = document.getElementById('result');
+        const loading = document.getElementById('loading');
+        const clearButton = document.getElementById('clear-button');
+        const detectAgain = document.getElementById('detect-again');
+
+        fileInput.addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    preview.src = e.target.result;
+                    previewContainer.style.display = 'flex';
+                    uploadAndVerify(file);
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        clearButton.addEventListener('click', function () {
+            previewContainer.style.display = 'none';
+            result.style.display = 'none';
+            fileInput.value = '';
+            preview.src = '';
+        });
+
+        detectAgain.addEventListener('click', function () {
+            if (preview.src) {
+                uploadAndVerify(fileInput.files[0]);
+            }
+        });
+
+        function uploadAndVerify(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            loading.style.display = 'block';
+            result.style.display = 'none';
+
+            fetch('/predict', {
+                method: 'POST',
+                body: formData
+            })
+                .then(response => response.json())
+                .then(data => {
+                    loading.style.display = 'none';
+                    result.style.display = 'block';
+
+                    if (data.error) {
+                        showError(data.error);
+                    } else {
+                        document.getElementById('extracted-text').textContent =
+                            "Extracted Text: " + data.extracted_text;
+                        // Parse markdown to HTML using marked
+                        document.getElementById('analysis').innerHTML = marked.parse(data.analysis);
+                    }
+                })
+                .catch(error => {
+                    loading.style.display = 'none';
+                    showError('An error occurred while processing the image');
+                    console.error('Error:', error);
+                });
+        }
+
+        function showError(message) {
+            result.innerHTML = `<div class="result-container" style="background-color: #f2dede; color: #a94442;">
+                    ${message}
+                </div>`;
+            result.style.display = 'block';
+        }
+    </script>
+</body>
+
+</html>
